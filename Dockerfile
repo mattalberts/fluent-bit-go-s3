@@ -1,20 +1,28 @@
-FROM golang:1.14.0-buster AS build-env
-ENV CGO_ENABLED=1
-ENV GOOS=linux
-ENV GOARCH=amd64
-ENV GOPATH=/go
-ADD . /go/src/github.com/cosmo0920/fluent-bit-go-s3
-WORKDIR /go/src/github.com/cosmo0920/fluent-bit-go-s3
-RUN make build
+FROM golang:1.14.4-buster AS build
+WORKDIR /fluent-bit-go-s3
 
-FROM fluent/fluent-bit:1.3.9
-LABEL Description="Fluent Bit Go S3" FluentBitVersion="1.3.9"
+ARG PLUGIN_NAME="unknown"
+ARG VERSION="unknown"
+ARG REVISION="unknown"
 
-MAINTAINER Hiroshi Hatake <cosmo0920.wp[at]gmail.com>
-COPY --from=build-env /go/src/github.com/cosmo0920/fluent-bit-go-s3/out_s3.so /usr/lib/x86_64-linux-gnu/
-COPY docker/fluent-bit-s3.conf \
-     /fluent-bit/etc/
+ENV GOPROXY=https://proxy.golang.org
+COPY go.mod ./
+RUN go mod download
+
+COPY *.go ./
+RUN GO_EXTLINK_ENABLED=1 CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+    -o /go/bin/out_s3.so \
+    -buildmode=c-shared \
+    -ldflags="-s -X main.name=${PLUGIN_NAME} -X main.version=${VERSION} -X main.revision=${REVISION}" \
+    -tags netgo -installsuffix netgo \
+    -v github.com/cosmo0920/fluent-bit-go-s3
+
+FROM fluent/fluent-bit:1.4.6 AS final
+LABEL Description="Fluent Bit S3" FluentBitVersion="1.4.6"
+
+COPY --from=build /go/bin/out_s3.so /usr/lib/x86_64-linux-gnu/
+
 EXPOSE 2020
 
 # Entry point
-CMD ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit-s3.conf", "-e", "/usr/lib/x86_64-linux-gnu/out_s3.so"]
+CMD ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf", "-e", "/usr/lib/x86_64-linux-gnu/out_s3.so"]

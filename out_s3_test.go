@@ -87,6 +87,7 @@ func TestCreateJSONWithNestedKey(t *testing.T) {
 
 	val, err := NestedMapLookup(result, "nested", "key", "key2")
 	assert.Equal(t, val, "not base64 encoded")
+	assert.Nil(t, err, "error to be nil")
 }
 
 func TestGenerateObjectKey(t *testing.T) {
@@ -201,11 +202,10 @@ func readGzip(dst io.Writer, src io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer zr.Close()
 
-	io.Copy(dst, zr)
-
-	return nil
+	_, err = io.Copy(dst, zr)
+	_ = zr.Close()
+	return err
 }
 
 func TestMakeGzip(t *testing.T) {
@@ -299,7 +299,7 @@ func (p *testFluentPlugin) addrecord(rc int, ts interface{}, line map[interface{
 	p.records = append(p.records, testrecord{rc: rc, ts: ts, data: line})
 }
 
-type testPluginContext struct {}
+type testPluginContext struct{}
 
 func (p *testPluginContext) PluginGetContext(ctx unsafe.Pointer) interface{} {
 	return 0
@@ -325,7 +325,6 @@ func (s *stubProvider) IsExpired() bool {
 }
 
 type testS3Credential struct {
-	credential string
 }
 
 func (c *testS3Credential) GetCredentials(accessID, secretkey, credential string) (*credentials.Credentials, error) {
@@ -406,10 +405,11 @@ func TestPluginFlusher(t *testing.T) {
 	assert.Equal(t, output.FLB_OK, res)
 	assert.Len(t, testplugin.events, 1) // event length should be 1.
 	var parsed map[string]interface{}
-	json.Unmarshal(testplugin.events[0].data, &parsed)
+	err := json.Unmarshal(testplugin.events[0].data, &parsed)
 	expected := `{"mykey":"myvalue"}
 {"mykey":"myvalue"}
 {"mykey":"myvalue"}
 `
 	assert.Equal(t, expected, string(testplugin.events[0].data))
+	assert.NotNil(t, err, "json.Unmarshal must not err")
 }

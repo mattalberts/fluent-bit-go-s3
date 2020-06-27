@@ -1,4 +1,11 @@
-out_s3.h
-out_s3.so
-coverage.txt
+*.swp
+*.swo
+vendor/
+.vs/
+.vscode/
+.idea/
 .DS_Store
+go.sum
+coverage.txt
+.build/
+bazel-*

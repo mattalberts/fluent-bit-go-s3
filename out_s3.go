@@ -4,16 +4,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
+
 	"github.com/fluent/fluent-bit-go/output"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	jsoniter "github.com/json-iterator/go"
+
+	log "github.com/sirupsen/logrus"
 )
-import "github.com/json-iterator/go"
-import "github.com/aws/aws-sdk-go/aws"
-import "github.com/aws/aws-sdk-go/aws/awserr"
-import "github.com/aws/aws-sdk-go/aws/session"
-import "github.com/aws/aws-sdk-go/service/s3"
-import "github.com/aws/aws-sdk-go/service/s3/s3manager"
-import log "github.com/sirupsen/logrus"
-import "github.com/prometheus/common/version"
 
 import (
 	"C"
@@ -27,8 +30,12 @@ import (
 )
 
 var plugin GoOutputPlugin = &fluentPlugin{}
-var logger *log.Logger
 var context GoPluginContext = &pluginContext{}
+var logger *log.Logger
+
+var name = "UNKNOWN"
+var version = "UNKNOWN"
+var revision = "UNKNOWN"
 
 func init() {
 	logLevel, _ := log.ParseLevel("info")
@@ -71,7 +78,7 @@ func (p *fluentPlugin) GetRecord(dec *output.FLBDecoder) (int, interface{}, map[
 }
 
 func (p *fluentPlugin) NewDecoder(data unsafe.Pointer, length int) *output.FLBDecoder {
-	return output.NewDecoder(data, int(length))
+	return output.NewDecoder(data, length)
 }
 
 func (p *fluentPlugin) Exit(code int) {
@@ -105,7 +112,7 @@ func (p *fluentPlugin) Put(s3operator *s3operator, objectKey string, timestamp t
 	return nil
 }
 
-type pluginContext struct {}
+type pluginContext struct{}
 
 type GoPluginContext interface {
 	PluginGetContext(ctx unsafe.Pointer) interface{}
@@ -128,7 +135,9 @@ func makeGzip(body []byte) ([]byte, error) {
 		gw.Name = "fluent-bit-go-s3"
 		gw.ModTime = time.Now()
 
-		defer gw.Close()
+		defer closeWithOnErr(gw, func(e error) {
+			logger.Warnf("Gzip writer close failure: %s", e.Error())
+		})
 
 		if _, err := gw.Write(body); err != nil {
 			return err
@@ -140,7 +149,7 @@ func makeGzip(body []byte) ([]byte, error) {
 
 //export FLBPluginRegister
 func FLBPluginRegister(ctx unsafe.Pointer) int {
-	return output.FLBPluginRegister(ctx, "s3", "S3 Output plugin written in GO!")
+	return output.FLBPluginRegister(ctx, "s3", "S3 Output plugin")
 }
 
 var (
@@ -216,7 +225,7 @@ func newS3Output(ctx unsafe.Pointer, operatorID int) (*s3operator, error) {
 	}
 	logger := newLogger(config.logLevel)
 
-	logger.Infof("[flb-go %d] Starting fluent-bit-go-s3: %v", operatorID, version.Info())
+	logger.Infof("[flb-go %d] Starting fluent-bit-go-s3: %v", operatorID, variant())
 	logger.Infof("[flb-go %d] plugin credential parameter = '%s'", operatorID, credential)
 	logger.Infof("[flb-go %d] plugin accessKeyID parameter = '%s'", operatorID, obfuscateSecret(accessKeyID))
 	logger.Infof("[flb-go %d] plugin secretAccessKey parameter = '%s'", operatorID, obfuscateSecret(secretAccessKey))
@@ -229,9 +238,8 @@ func newS3Output(ctx unsafe.Pointer, operatorID int) (*s3operator, error) {
 	logger.Infof("[flb-go %d] plugin autoCreateBucket parameter = '%s'", operatorID, autoCreateBucket)
 	logger.Infof("[flb-go %d] plugin timeZone parameter = '%s'", operatorID, timeZone)
 
-
 	cfg := aws.Config{
-		Region:      config.region,
+		Region: config.region,
 	}
 	if config.credentials != nil {
 		cfg.WithCredentials(config.credentials)
@@ -241,11 +249,11 @@ func newS3Output(ctx unsafe.Pointer, operatorID int) (*s3operator, error) {
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config: cfg,
+		Config:            cfg,
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 
-	if config.autoCreateBucket == true {
+	if config.autoCreateBucket {
 		_, err = ensureBucket(sess, config.bucket, config.region)
 		if err != nil {
 			return nil, err
@@ -431,4 +439,14 @@ func obfuscateSecret(message string) string {
 }
 
 func main() {
+}
+
+func variant() string {
+	return fmt.Sprintf("(version=%s, revision=%s)", version, revision)
+}
+
+func closeWithOnErr(closer io.Closer, onErr func(err error)) {
+	if e := closer.Close(); e != nil {
+		onErr(e)
+	}
 }

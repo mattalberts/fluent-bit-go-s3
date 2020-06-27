@@ -2,9 +2,10 @@ package main
 
 import (
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetS3ConfigStaticCredentials(t *testing.T) {
@@ -71,7 +72,7 @@ func TestGetS3ConfigInvalidEndpoint(t *testing.T) {
 	s3Creds = &testS3Credential{}
 	_, err := getS3Config("", "", "examplecredentials", "exampleprefix", "", "examplebucket", "exampleregion", "gzip", "https://your-bucketname.s3.amazonaws.com", "false", "", "", "")
 	if err != nil {
-		expected := errors.New("Endpoint is not supported for AWS S3. This parameter is intended for S3 compatible services. Use Region instead.")
+		expected := errors.New("endpoint is not supported for AWS S3, 'Endpoint' is for S3 compatible services, use 'Region' instead")
 		assert.Equal(t, expected, err)
 	}
 }

@@ -2,15 +2,14 @@ package main
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
-)
-import "github.com/aws/aws-sdk-go/aws/credentials"
-import log "github.com/sirupsen/logrus"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 
-import (
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type format int
@@ -72,17 +71,17 @@ func getS3Config(accessID, secretKey, credential, s3prefix, suffixAlgorithm, buc
 	conf := &s3Config{}
 	creds, err := s3Creds.GetCredentials(accessID, secretKey, credential)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create credentials")
+		return nil, fmt.Errorf("failed to create credentials")
 	}
 	conf.credentials = creds
 
 	if bucket == "" {
-		return nil, fmt.Errorf("Cannot specify empty string to bucket name")
+		return nil, fmt.Errorf("cannot specify empty string to bucket name")
 	}
 	conf.bucket = aws.String(bucket)
 
 	if s3prefix == "" {
-		return nil, fmt.Errorf("Cannot specify empty string to s3prefix")
+		return nil, fmt.Errorf("cannot specify empty string to s3prefix")
 	}
 	conf.s3prefix = aws.String(s3prefix)
 
@@ -94,7 +93,7 @@ func getS3Config(accessID, secretKey, credential, s3prefix, suffixAlgorithm, buc
 	}
 
 	if region == "" {
-		return nil, fmt.Errorf("Cannot specify empty string to region")
+		return nil, fmt.Errorf("cannot specify empty string to region")
 	}
 	conf.region = aws.String(region)
 
@@ -107,7 +106,7 @@ func getS3Config(accessID, secretKey, credential, s3prefix, suffixAlgorithm, buc
 
 	if endpoint != "" {
 		if strings.HasSuffix(endpoint, "amazonaws.com") {
-			return nil, fmt.Errorf("Endpoint is not supported for AWS S3. This parameter is intended for S3 compatible services. Use Region instead.")
+			return nil, fmt.Errorf("endpoint is not supported for AWS S3, 'Endpoint' is for S3 compatible services, use 'Region' instead")
 		}
 		conf.endpoint = endpoint
 	}
