@@ -5,11 +5,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 
 	"github.com/fluent/fluent-bit-go/output"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -207,6 +212,7 @@ func newS3Output(ctx unsafe.Pointer, operatorID int) (*s3operator, error) {
 	credential := plugin.PluginConfigKey(ctx, "Credential")
 	accessKeyID := plugin.PluginConfigKey(ctx, "AccessKeyID")
 	secretAccessKey := plugin.PluginConfigKey(ctx, "SecretAccessKey")
+	roleArn := plugin.PluginConfigKey(ctx, "RoleARN")
 	bucket := plugin.PluginConfigKey(ctx, "Bucket")
 	s3prefix := plugin.PluginConfigKey(ctx, "S3Prefix")
 	suffixAlgorithm := plugin.PluginConfigKey(ctx, "SuffixAlgorithm")
@@ -239,19 +245,41 @@ func newS3Output(ctx unsafe.Pointer, operatorID int) (*s3operator, error) {
 	logger.Infof("[flb-go %d] plugin timeZone parameter = '%s'", operatorID, timeZone)
 
 	cfg := aws.Config{
-		Region: config.region,
+		Region:                        config.region,
+		CredentialsChainVerboseErrors: aws.Bool(true),
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
-	if config.credentials != nil {
-		cfg.WithCredentials(config.credentials)
-	}
+	/*
+		if config.credentials != nil {
+			cfg.WithCredentials(config.credentials)
+		}
+	*/
 	if config.endpoint != "" {
 		cfg.WithEndpoint(config.endpoint).WithS3ForcePathStyle(true)
 	}
-
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		Config:            cfg,
 		SharedConfigState: session.SharedConfigEnable,
 	}))
+	creds := credentials.NewChainCredentials([]credentials.Provider{
+		&ec2rolecreds.EC2RoleProvider{
+			Client: ec2metadata.New(sess),
+		},
+		&credentials.EnvProvider{},
+		&stscreds.AssumeRoleProvider{RoleARN: roleArn},
+		&credentials.SharedCredentialsProvider{
+			Filename: credential,
+			Profile:  "",
+		},
+		&credentials.StaticProvider{Value: credentials.Value{
+			AccessKeyID:     accessKeyID,
+			SecretAccessKey: secretAccessKey,
+			SessionToken:    "",
+		}},
+	})
+	sess.Config.Credentials = creds
 
 	if config.autoCreateBucket {
 		_, err = ensureBucket(sess, config.bucket, config.region)

@@ -24,7 +24,7 @@ spec:
         role: adapter
     spec:
       containers:
-      - image: docker.io/mattalberts/fluent-bit:1.4.6-s3-ed27f80
+      - image: docker.io/mattalberts/fluent-bit:1.4.6-s3-ae674c8
         imagePullPolicy: Always
         name: fluent-bit
         ports:
@@ -162,13 +162,14 @@ data:
       Name             s3
       Match            kubernetes.*
       Bucket           affirm-stage-logs
-      S3Prefix         fluent-bit
+      S3Prefix         logs/kubernetes/mattalberts
       Region           us-east-1
       Compress         gzip
       AutoCreateBucket false
       LogLevel         info
       TimeZone         UTC
       Retry_Limit      5
+      SuffixAlgorithm  sha256
 
   parsers.conf: |+
     [PARSER]

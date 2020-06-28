@@ -69,11 +69,13 @@ func (c *s3PluginConfig) GetCredentials(accessKeyID, secretKey, credential strin
 
 func getS3Config(accessID, secretKey, credential, s3prefix, suffixAlgorithm, bucket, region, compress, endpoint, autoCreateBucket, logLevel, timeFormat, timeZone string) (*s3Config, error) {
 	conf := &s3Config{}
-	creds, err := s3Creds.GetCredentials(accessID, secretKey, credential)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create credentials")
-	}
-	conf.credentials = creds
+	/** credential setup replaced with chain provider
+		creds, err := s3Creds.GetCredentials(accessID, secretKey, credential)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create credentials")
+		}
+		conf.credentials = creds
+	*/
 
 	if bucket == "" {
 		return nil, fmt.Errorf("cannot specify empty string to bucket name")
